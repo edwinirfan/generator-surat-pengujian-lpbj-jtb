@@ -2453,8 +2453,8 @@ function setChip(el, group, val){
 function getPS(){
   const paperVal = document.getElementById('ps-paper').value;
   const parts = paperVal.split(' ');
-  const paper = parts[0];
-  const orient = parts[1] || 'portrait';
+  const orient = parts.pop() || 'portrait';   // token terakhir = orientasi
+  const paper = parts.join(' ');               // "A4", "210mm 330mm" (F4), ...
   const mt = parseFloat(document.getElementById('ps-mt').value)||2;
   const mb = parseFloat(document.getElementById('ps-mb').value)||2;
   const ml = parseFloat(document.getElementById('ps-ml').value)||2;
@@ -3749,18 +3749,24 @@ ${headerSection}
 }
 function downloadWord(html, filename, s) { downloadWordLegacy(html, filename, s); }
 function cetakSuratCore(html, s){
-  const paperH = {'A4':297,'210mm':330,'letter':279,'legal':356,'A3':420}[s.paper]||297;
-  const paperW = {'A4':210,'210mm':210,'letter':216,'legal':216,'A3':297}[s.paper]||210;
-  const PH = s.orient==='landscape' ? paperW : paperH;
+  const paperH = {'A4':297,'210mm 330mm':330,'letter':279,'legal':356,'A3':420}[s.paper]||297;
+  const paperW = {'A4':210,'210mm 330mm':210,'letter':216,'legal':216,'A3':297}[s.paper]||210;
   const PW = s.orient==='landscape' ? paperH : paperW;
-  const PX = 3.7795;
-  const cW = Math.round((PW - s.ml - s.mr) * PX);
-  const cH = Math.round((PH - s.mt - s.mb) * PX);
-  const pgOn  = s.pgnum;
-  const hdrTxt = s.header||'';
+  const cW = Math.round((PW - (s.ml + s.mr) * 10) * 3.7795);   // lebar area cetak (px); margin cm → mm
   const w = window.open('','_blank','width='+(cW+60)+',height=820');
   if(!w){ showToast('⚠️ Izinkan pop-up browser terlebih dahulu'); return; }
-  const pageSize = s.paper==='210mm' ? '210mm 330mm' : s.paper;
+  // ukuran eksplisit ("210mm 330mm") tidak boleh diberi kata orientasi; nama kertas ("A4") boleh
+  const pageSize = /\d+mm/.test(s.paper) ? s.paper : s.paper + ' ' + s.orient;
+
+  // Nomor halaman & header pakai margin box @page: browser yang memotong halaman, jadi
+  // tidak ada lagi halaman setengah kosong (dulu posisi potong ditebak dari tinggi layar).
+  // Nomor halaman mulai halaman 2; header (jika diisi) di semua halaman.
+  const cssStr = t => '"' + String(t).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\s*\n\s*/g,' ') + '"';
+  const hdr = (s.header||'').trim();
+  const num = '"-" counter(page) "-"';
+  const topAll   = [hdr && cssStr(hdr), hdr && s.pgnum && '"\\A"', s.pgnum && num].filter(Boolean).join(' ') || 'none';
+  const topFirst = hdr ? cssStr(hdr) : 'none';
+
   w.document.write(`<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
@@ -3768,40 +3774,21 @@ function cetakSuratCore(html, s){
 body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.6;color:#000;background:#fff;width:${cW}px;margin:0 auto;padding:0;}
 img{max-width:100%;display:block;}
 table{border-collapse:collapse;width:100%;}
-.pg-num{text-align:center;font-size:11pt;font-family:Arial,sans-serif;font-weight:normal;padding:0 0 8px;}
-.pg-hdr{text-align:center;font-size:10pt;border-bottom:1px solid #000;margin-bottom:8px;padding-bottom:4px;font-style:italic;}
-@media screen{body{padding:20px 0;}.pg-num,.pg-hdr{display:none;}}
-@media print{
-  @page{size:${pageSize} ${s.orient};margin:${s.mt}cm ${s.mr}cm ${s.mb}cm ${s.ml}cm;}
-  body{width:100%;padding:0;}
-  .pg-num{display:block;page-break-before:always;padding:0 0 10px;}
-  .pg-hdr{display:block;}
+tr{break-inside:avoid;}
+@media screen{body{padding:20px 0;}}
+@page{
+  size:${pageSize};margin:${s.mt}cm ${s.mr}cm ${s.mb}cm ${s.ml}cm;
+  @top-center{content:${topAll};white-space:pre;font:10pt Arial,sans-serif;vertical-align:bottom;padding-bottom:4mm;}
 }
+@page:first{@top-center{content:${topFirst};}}
+@media print{body{width:100%;}}
 </style>
 </head>
 <body>
-${hdrTxt ? '<div class="pg-hdr">'+hdrTxt+'</div>' : ''}
 ${html}
 ${'<script>'}
-window.addEventListener('load',function(){setTimeout(run,280);});
-function run(){
-  var ON=${pgOn};var HDR=${JSON.stringify(hdrTxt)};var PH=${cH};
-  var body=document.body;
-  var all=Array.from(body.children).filter(function(el){return !el.classList.contains('pg-num')&&!el.classList.contains('pg-hdr');});
-  var pg=1;
-  all.forEach(function(b){
-    var top=b.getBoundingClientRect().top+window.scrollY;
-    var p=Math.floor(top/PH)+1;
-    if(p>pg){
-      pg=p;
-      if(ON){var d=document.createElement('div');d.className='pg-num';d.textContent='-'+pg+'-';body.insertBefore(d,b);}
-      if(HDR){var h=document.createElement('div');h.className='pg-hdr';h.textContent=HDR;body.insertBefore(h,ON?b.previousSibling:b);}
-    }
-  });
-  document.querySelectorAll('.pg-num,.pg-hdr').forEach(function(el){el.style.display='block';});
-  setTimeout(function(){window.focus();window.print();},500);
-}
-</'+'script>
+window.addEventListener('load',function(){setTimeout(function(){window.focus();window.print();},300);});
+<\/script>
 </body></html>`);
   w.document.close();
 }
