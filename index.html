@@ -2719,7 +2719,7 @@ async function generateDocxPenerimaan(d, vSampel, vItems) {
     children
   }]});
 
-  const buf = await Packer.toBuffer(doc);
+  const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
   const perus = (d.namaPerusahaan||'').replace(/[^\w\s]/g,'').replace(/\s+/g,'_').slice(0,30);
   const fname = `Form_Penerimaan_Sampel_Uji_${d.noSampel||''}${perus?'_'+perus:''}.docx`;
   const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
@@ -2926,7 +2926,7 @@ async function generateDocxKajiUlang(d, vItems) {
     children
   }]});
 
-  const buf = await Packer.toBuffer(doc);
+  const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
   const perus = (d.namaPerusahaan||'').replace(/[^\w\s]/g,'').replace(/\s+/g,'_').slice(0,30);
   const fname = `Kaji_Ulang_Permintaan_Pengujian_${d.noSampel||''}${perus?'_'+perus:''}.docx`;
   const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
@@ -3073,7 +3073,7 @@ async function generateDocxTugas(d, vItems, vSampel, j) {
     children:[ nomorP, bodyTable, perintahP, ttdTable ]
   }]});
 
-  const buf = await Packer.toBuffer(doc);
+  const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
   const perus = (d.namaPerusahaan||'').replace(/[^\w\s]/g,'').replace(/\s+/g,'_').slice(0,30);
   const fname = `Surat_Tugas_Pengujian_No-${d.nomorSuratTugas||''}_${perus}.docx`;
   const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
@@ -3205,7 +3205,7 @@ async function generateDocxPenyerahan(d, vSampel) {
     children:[ dataTable ]
   }]});
 
-  const buf = await Packer.toBuffer(doc);
+  const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
   const perus = (d.namaPerusahaan||'').replace(/[^\w\s]/g,'').replace(/\s+/g,'_').slice(0,30);
   const fname = `Penyerahan_Sampel_Uji_${d.noSampel||''}${perus?'_'+perus:''}.docx`;
   const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
@@ -3464,7 +3464,7 @@ async function callDocxApi(payload, type) {
     titlePage:true,
     children:ch}]});
 
-    const buf = await Packer.toBuffer(doc);
+    const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
     const noTgsJ = (d.nomorSuratTugas||'').replace(/[^A-Za-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);
     return { buffer:buf, filename:`Surat_Jawaban_Permohonan${noTgsJ?'_No-'+noTgsJ:''}_${perus}.docx` };
   }
@@ -3609,22 +3609,36 @@ async function callDocxApi(payload, type) {
     children:ch2
   }]});
 
-  const buf2 = await Packer.toBuffer(doc2);
+  const buf2 = await (await Packer.toBlob(doc2)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
   const noTgsK = (d.nomorSuratTugas||'').replace(/[^A-Za-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);
   return { buffer:buf2, filename:`Surat_Perjanjian_Pengujian${noTgsK?'_No-'+noTgsK:''}_${perus}.docx` };
 }
 
 // ─── Load docx library from CDN ───
 let _docxLib = null;
-async function loadDocxLib() {
-  if (_docxLib) return _docxLib;
+// docx tidak tersedia di cdnjs — pakai jsDelivr, fallback ke unpkg.
+const DOCX_LIB_URLS = [
+  'https://cdn.jsdelivr.net/npm/docx@9.6.1/dist/index.iife.min.js',
+  'https://unpkg.com/docx@9.6.1/dist/index.iife.js'
+];
+function _loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/docx/9.6.1/docx.umd.min.js';
-    s.onload = () => { _docxLib = window.docx; resolve(window.docx); };
-    s.onerror = () => reject(new Error('Gagal memuat library docx'));
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => { s.remove(); reject(new Error('gagal memuat ' + src)); };
     document.head.appendChild(s);
   });
+}
+async function loadDocxLib() {
+  if (_docxLib) return _docxLib;
+  for (const url of DOCX_LIB_URLS) {
+    try {
+      await _loadScript(url);
+      if (window.docx && window.docx.Packer) return (_docxLib = window.docx);
+    } catch (e) { /* coba URL berikutnya */ }
+  }
+  throw new Error('Gagal memuat library docx (cek koneksi internet)');
 }
 
 // ─── Download blob as .docx ───
