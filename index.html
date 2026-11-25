@@ -1301,7 +1301,7 @@ select {
         <div class="surat-btns">
           <button class="btn btn-ghost" id="btn-edit-penerimaan" onclick="toggleEdit('penerimaan')">✏ Edit Teks</button>
           <button class="btn btn-purple" onclick="showPrintSettings('penerimaan')">🖨 Cetak/PDF</button>
-          <button class="btn" style="background:#7c3aed;color:#fff;" onclick="downloadWordPenerimaan()">📝 Word</button>
+          <button class="btn" style="background:#7c3aed;color:#fff;" onclick="doWord('penerimaan')">📝 Word</button>
         </div>
       </div>
       <div class="edit-banner" id="banner-penerimaan" style="display:none;"></div>
@@ -1320,7 +1320,7 @@ select {
         <div class="surat-btns">
           <button class="btn btn-ghost" id="btn-edit-kajiulang" onclick="toggleEdit('kajiulang')">✏ Edit Teks</button>
           <button class="btn btn-purple" onclick="showPrintSettings('kajiulang')">🖨 Cetak/PDF</button>
-          <button class="btn" style="background:#d97706;color:#fff;" onclick="downloadWordKajiUlang()">📝 Word</button>
+          <button class="btn" style="background:#d97706;color:#fff;" onclick="doWord('kajiulang')">📝 Word</button>
         </div>
       </div>
       <div class="edit-banner" id="banner-kajiulang" style="display:none;"></div>
@@ -3847,33 +3847,6 @@ function dlHistWord(id,which){
   const fname = fnames[which] || ('Surat_'+which+sfx);
   const key='html'+which.charAt(0).toUpperCase()+which.slice(1);
   downloadWordLegacy(entry[key], fname, {mt:2,mb:2,ml:3,mr:2});
-}
-
-function downloadWordKajiUlang(){
-  if(!generated){showToast('⚠️ Generate dokumen terlebih dahulu');return;}
-  const d=generated.d;
-  const perus=(d.namaPerusahaan||'').replace(/[^A-Za-z0-9\u00C0-\u017E\s]/g,'').replace(/\s+/g,'_').slice(0,40);
-  const noSmp=(d.noSampel||'').replace(/[^A-Za-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);
-  const sfx=(noSmp?'_'+noSmp:'')+(perus?'_'+perus:'');
-  const html=document.getElementById('body-kajiulang').innerHTML;
-  // POIN 2: Header dengan KOP
-  const kopHeader = `<img src="${LOGO_PU}" style="width:44px;height:44px;vertical-align:middle;"/> `
-    + `<span style="font-weight:700;font-size:10pt;vertical-align:middle;">LABORATORIUM PENGUJIAN BAHAN JALAN WILAYAH JAWA TIMUR DAN BALI</span>`;
-  downloadWordLegacy(html,'Kaji_Ulang_Permintaan_Pengujian'+sfx,{mt:3,mb:2,ml:3,mr:2}, kopHeader);
-}
-
-function downloadWordPenerimaan(){
-  if(!generated){showToast('⚠️ Generate dokumen terlebih dahulu');return;}
-  const d=generated.d;
-  const perus=(d.namaPerusahaan||'').replace(/[^A-Za-z0-9\u00C0-\u017E\s]/g,'').replace(/\s+/g,'_').slice(0,40);
-  const noSmp=(d.noSampel||'').replace(/[^A-Za-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);
-  const sfx=(noSmp?'_'+noSmp:'')+(perus?'_'+perus:'');
-  const fname='Form_Penerimaan_Sampel_Uji'+sfx;
-  const html=document.getElementById('body-penerimaan').innerHTML;
-  // POIN 2: Header dengan KOP LOGO LPBJ
-  const kopHeader = `<img src="${LOGO_PU}" style="width:44px;height:44px;vertical-align:middle;"/> `
-    + `<span style="font-weight:700;font-size:10pt;vertical-align:middle;">LABORATORIUM PENGUJIAN BAHAN JALAN WILAYAH JAWA TIMUR DAN BALI</span>`;
-  downloadWordLegacy(html, fname, {mt:3,mb:2,ml:3,mr:2}, kopHeader);
 }
 
 // ═══ EDIT TOOLBAR ═══
