@@ -13,9 +13,17 @@ Aplikasi web satu file (`index.html`) untuk membuat dokumen pengujian Laboratori
 
 Buka `index.html` di browser (Chrome disarankan). Tidak perlu instalasi atau server. Isi form, klik **⚡ Generate Semua Dokumen**, lalu cetak/PDF atau download Word dari tab **Preview & Cetak**.
 
-Butuh koneksi internet untuk font (Google Fonts) dan library `docx` untuk export Word Surat Jawaban & Perjanjian.
+Butuh koneksi internet untuk font (Google Fonts) dan library `docx` (jsDelivr, cadangan unpkg) untuk export Word Surat Jawaban & Perjanjian.
+
+## Export
+
+- **Word (.docx)** — tombol *Download Word* di dialog Cetak/PDF dan tombol 📝 Word di kartu dokumen memakai jalur yang sama (`doWord`).
+  - Surat Jawaban & Perjanjian dibuat dengan library docx.js (KOP di header halaman 1, nomor halaman mulai halaman 2).
+  - Surat Tugas, Penyerahan, Penerimaan & Kaji Ulang memakai template Word yang tertanam (`TPL_*`, docxtemplater), diisi dari data form dengan logika yang sama seperti preview.
+- **Cetak/PDF** — membuka jendela cetak browser; nomor halaman memakai `@page` margin box (Chrome/Edge 131+).
 
 ## Known issues
 
-- Download Word untuk Surat Jawaban & Surat Perjanjian gagal: URL library `docx` di cdnjs 404, dan kode memakai `Packer.toBuffer()` yang hanya jalan di Node.js.
-- Export Word Surat Tugas, Penyerahan Sampel, dan Kaji Ulang hanya mengisi sebagian data (sisanya template kosong).
+- Tombol Word di tab **History** masih memakai export HTML lama (`.doc`): KOP bisa terpotong dan layout Nomor/Sifat/Hal berantakan.
+- Hasil **✏ Edit Teks** di preview tidak ikut ke file Word (Word dibuat ulang dari data form).
+- Ejaan "LABOTORIUM" di KOP Surat Tugas & Penyerahan perlu dicocokkan dengan form resmi.
