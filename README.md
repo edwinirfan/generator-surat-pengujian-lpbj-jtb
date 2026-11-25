@@ -11,7 +11,9 @@ Aplikasi web satu file (`index.html`) untuk membuat dokumen pengujian Laboratori
 
 ## Cara pakai
 
-Buka `index.html` di browser (Chrome disarankan). Tidak perlu instalasi atau server. Isi form, klik **⚡ Generate Semua Dokumen**, lalu cetak/PDF atau download Word dari tab **Preview & Cetak**.
+**Online:** https://edwinirfan.github.io/generator-surat-pengujian-lpbj-jtb/
+
+Atau buka `index.html` di browser (Chrome disarankan). Tidak perlu instalasi atau server. Isi form, klik **⚡ Generate Semua Dokumen**, lalu cetak/PDF atau download Word dari tab **Preview & Cetak**.
 
 Butuh koneksi internet untuk font (Google Fonts) dan library `docx` (jsDelivr, cadangan unpkg) untuk export Word Surat Jawaban & Perjanjian.
 
