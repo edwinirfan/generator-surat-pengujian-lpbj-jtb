@@ -3348,6 +3348,8 @@ async function callDocxApi(payload, type) {
   const BORDER_NONE = { style: BorderStyle.NONE, size:0, color:'FFFFFF' };
   const BORDER_NONE_ALL = { top:BORDER_NONE, bottom:BORDER_NONE, left:BORDER_NONE, right:BORDER_NONE };
   const mm = (v) => Math.round(v * 56.6929);
+  // Font default dokumen (termasuk angka list "1." / "1)") — tanpa ini Word memakai Times New Roman.
+  const DOC_STYLES = { default: { document: { run: { font: 'Arial', size: SZ } } } };
 
   const run = (text, opts={}) => new TextRun({
     text, font:ARIAL, size:SZ,
@@ -3364,7 +3366,8 @@ async function callDocxApi(payload, type) {
     indent: opts.indent,
     numbering: opts.numbering,
     style: opts.style,
-    tabStops: opts.tabStops
+    tabStops: opts.tabStops,
+    keepNext: opts.keepNext
   });
 
   const emptyPara = (opts={}) => para([new TextRun({text:'',font:ARIAL,size:SZ})],opts);
@@ -3406,7 +3409,8 @@ async function callDocxApi(payload, type) {
     children:[
       new ImageRun({
         data: kopBytes,
-        transformation:{ width:mm(157.5), height:mm(23.6) },
+        // ImageRun memakai PIKSEL (96 dpi), bukan twip — 157,5 x 23,6 mm
+        transformation:{ width:Math.round(157.5/25.4*96), height:Math.round(23.6/25.4*96) },
         type: isJpeg ? 'jpg' : 'png'
       })
     ]
@@ -3427,13 +3431,13 @@ async function callDocxApi(payload, type) {
     tblRows.push(new TableRow({children:[
       new TableCell({width:{size:708,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,
         margins:{top:60,bottom:60,left:80,right:80},
-        children:[para([run('No.')],{align:AlignmentType.CENTER,before:60,after:60})]}),
+        children:[para([run('No.',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
       new TableCell({width:{size:4860,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,
         margins:{top:60,bottom:60,left:80,right:80},
-        children:[para([run('Parameter Pengujian')],{align:AlignmentType.CENTER,before:60,after:60})]}),
+        children:[para([run('Parameter Pengujian',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
       new TableCell({width:{size:2508,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,
         margins:{top:60,bottom:60,left:80,right:80},
-        children:[para([run('Standar Acuan')],{align:AlignmentType.CENTER,before:60,after:60})]})
+        children:[para([run('Standar Acuan',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]})
     ]}));
     items.forEach((it,idx)=>{
       tblRows.push(new TableRow({children:[
@@ -3453,9 +3457,11 @@ async function callDocxApi(payload, type) {
 
     const ch = [];
     // Nomor row with tab to date
-    ch.push(new Paragraph({indent:{left:mm(5)},spacing:{before:200,after:0},alignment:AlignmentType.JUSTIFIED,
-      tabStops:[{type:TabStopType.LEFT,position:mm(22.5)},{type:TabStopType.LEFT,position:mm(120)}],
-      children:[run('Nomor'),run('\t: '),run(d.nomorJawaban||'___'),run('\t'+(d.tglJawaban||'Sidoarjo, ___'))]}));
+    const TEXT_W = 11907 - mm(30) - mm(20);   // lebar area teks (dxa)
+    ch.push(new Paragraph({indent:{left:mm(5)},spacing:{before:200,after:0},alignment:AlignmentType.LEFT,
+      tabStops:[{type:TabStopType.LEFT,position:mm(22.5)},{type:TabStopType.LEFT,position:mm(25)},
+                {type:TabStopType.RIGHT,position:TEXT_W}],
+      children:[run('Nomor'),run('\t:\t'),run(d.nomorJawaban||'___'),run('\t'+(d.tglJawaban||'Sidoarjo, ___'))]}));
     ch.push(new Paragraph({indent:{left:mm(5)},alignment:AlignmentType.JUSTIFIED,
       tabStops:[{type:TabStopType.LEFT,position:mm(22.5)},{type:TabStopType.LEFT,position:mm(25)}],
       children:[run('Sifat'),run('\t:\t'),run('Biasa ')]}));
@@ -3467,6 +3473,7 @@ async function callDocxApi(payload, type) {
       children:[run('Hal'),run('\t:\t'),run(halText)]}));
     ch.push(emptyPara()); ch.push(emptyPara());
     ch.push(para([run('Yth.')],{align:AlignmentType.LEFT,indent:{left:mm(5)}}));
+    if (d.namaPemohon) ch.push(para([run(d.namaPemohon)],{align:AlignmentType.LEFT,indent:{left:mm(5)}}));
     ch.push(para([run(`${d.jabatanPemohon||'Direktur'} ${d.namaPerusahaan||'___'}`)],{indent:{left:mm(5),right:mm(65)},align:AlignmentType.JUSTIFIED}));
     (d.alamatPemohon||'___').split('\n').filter(Boolean).forEach(line=>{
       ch.push(para([run(line)],{indent:{left:mm(5)},align:AlignmentType.JUSTIFIED}));
@@ -3489,21 +3496,22 @@ async function callDocxApi(payload, type) {
       {numbering:{reference:'jawaban-list',level:0},before:120,after:120,align:AlignmentType.JUSTIFIED}));
     ch.push(para([run('Demikian disampaikan, atas perhatiannya diucapkan terima kasih.')],
       {before:240,after:120,indent:{left:mm(12.5)},align:AlignmentType.JUSTIFIED}));
-    for(let i=0;i<6;i++) ch.push(emptyPara());
-    ch.push(para([run('An. KEPALA BALAI BESAR')],{align:AlignmentType.RIGHT}));
-    ch.push(para([run('PELAKSANAAN JALAN NASIONAL JAWA TIMUR BALI')],{align:AlignmentType.RIGHT}));
-    ch.push(para([run(`${(d.jabatanTTD||'KEPALA BIDANG PEMBANGUNAN JALAN DAN JEMBATAN').toUpperCase()},`)],{align:AlignmentType.RIGHT}));
-    for(let i=0;i<5;i++) ch.push(emptyPara());
-    ch.push(para([run(d.namaTTD||'___')],{align:AlignmentType.RIGHT}));
+    const SIGN = {align:AlignmentType.CENTER, indent:{left:mm(52)}};
+    for(let i=0;i<2;i++) ch.push(emptyPara());
+    ch.push(para([run('An. KEPALA BALAI BESAR')],SIGN));
+    ch.push(para([run('PELAKSANAAN JALAN NASIONAL JAWA TIMUR BALI')],SIGN));
+    ch.push(para([run(`${(d.jabatanTTD||'KEPALA BIDANG PEMBANGUNAN JALAN DAN JEMBATAN').toUpperCase()},`)],SIGN));
+    for(let i=0;i<4;i++) ch.push(emptyPara());
+    ch.push(para([run(d.namaTTD||'___',{bold:true})],SIGN));
     ch.push(emptyPara()); ch.push(emptyPara());
     ch.push(para([run('Tembusan:')],{indent:{left:mm(5)},align:AlignmentType.LEFT}));
     ch.push(para([run('Kepala Balai Besar Pelaksanaan Jalan Nasional Jawa Timur \u2013 Bali')],{indent:{left:mm(5)},align:AlignmentType.JUSTIFIED}));
 
-    const doc = new Document({numbering:numCfg,sections:[{
-      properties:{page:{size:{width:11907,height:16839},margin:{top:mm(32.5),right:mm(20),bottom:mm(25),left:mm(30)}}},
+    const doc = new Document({styles:DOC_STYLES,numbering:numCfg,sections:[{
+      properties:{titlePage:true,
+        page:{size:{width:11907,height:16839},margin:{top:mm(32.5),right:mm(20),bottom:mm(25),left:mm(30),header:mm(10)}}},
       headers:{default:pageHeader, first:firstPageHeader},
-    titlePage:true,
-    children:ch}]});
+      children:ch}]});
 
     const buf = await (await Packer.toBlob(doc)).arrayBuffer(); // toBuffer() hanya jalan di Node.js
     const noTgsJ = (d.nomorSuratTugas||'').replace(/[^A-Za-z0-9]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'').slice(0,30);
@@ -3521,8 +3529,8 @@ async function callDocxApi(payload, type) {
   }));
 
   const pasal = (no,judul) => [
-    para([run(`Pasal : ${no}`,{bold:true})],{align:AlignmentType.CENTER,before:240,after:0}),
-    para([run(judul,{bold:true})],{align:AlignmentType.CENTER,before:0,after:120})
+    para([run(`Pasal : ${no}`,{bold:true,underline:true})],{align:AlignmentType.CENTER,before:240,after:0,keepNext:true}),
+    para([run(judul,{bold:true})],{align:AlignmentType.CENTER,before:0,after:120,keepNext:true})
   ];
 
   // Party paragraphs (format teks, bukan tabel)
@@ -3561,18 +3569,18 @@ async function callDocxApi(payload, type) {
   // Item table
   const itblRows = [];
   itblRows.push(new TableRow({children:[
-    new TableCell({width:{size:590,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('No.')],{align:AlignmentType.CENTER,before:60,after:60})]}),
-    new TableCell({width:{size:3408,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Jenis Pengujian')],{align:AlignmentType.CENTER,before:60,after:60})]}),
-    new TableCell({width:{size:992,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Volume')],{align:AlignmentType.CENTER,before:60,after:60})]}),
-    new TableCell({width:{size:1134,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Satuan')],{align:AlignmentType.CENTER,before:60,after:60})]}),
-    new TableCell({width:{size:1276,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Harga Satuan')],{align:AlignmentType.CENTER,before:30,after:0}),para([run('( Rp. )')],{align:AlignmentType.CENTER,before:0,after:30})]}),
-    new TableCell({width:{size:1701,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Jumlah')],{align:AlignmentType.CENTER,before:30,after:0}),para([run('( Rp. )')],{align:AlignmentType.CENTER,before:0,after:30})]})
+    new TableCell({width:{size:590,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('No.',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
+    new TableCell({width:{size:3379,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Jenis Pengujian',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
+    new TableCell({width:{size:992,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Volume',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
+    new TableCell({width:{size:1134,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Satuan',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
+    new TableCell({width:{size:1276,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Harga Satuan',{bold:true})],{align:AlignmentType.CENTER,before:30,after:0}),para([run('( Rp. )',{bold:true})],{align:AlignmentType.CENTER,before:0,after:30})]}),
+    new TableCell({width:{size:1701,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Jumlah',{bold:true})],{align:AlignmentType.CENTER,before:30,after:0}),para([run('( Rp. )',{bold:true})],{align:AlignmentType.CENTER,before:0,after:30})]})
   ]}));
   items.forEach((it,idx)=>{
     const jumlah=(parseFloat(it.harga)||0)*(parseFloat(it.vol)||1);
     itblRows.push(new TableRow({children:[
       new TableCell({width:{size:590,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(`${idx+1}.`)],{align:AlignmentType.CENTER,before:60,after:60})]}),
-      new TableCell({width:{size:3408,type:WidthType.DXA},borders:CELL_BORDER_ALL,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(it.jenis)],{before:60,after:60})]}),
+      new TableCell({width:{size:3379,type:WidthType.DXA},borders:CELL_BORDER_ALL,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(it.jenis)],{before:60,after:60})]}),
       new TableCell({width:{size:992,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(String(parseFloat(it.vol)||1))],{align:AlignmentType.CENTER,before:60,after:60})]}),
       new TableCell({width:{size:1134,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(it.satuan||'Per Sample')],{align:AlignmentType.CENTER,before:60,after:60})]}),
       new TableCell({width:{size:1276,type:WidthType.DXA},borders:CELL_BORDER_ALL,verticalAlign:VerticalAlign.CENTER,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(rupiah(it.harga))],{align:AlignmentType.RIGHT,before:60,after:60})]}),
@@ -3581,11 +3589,11 @@ async function callDocxApi(payload, type) {
   });
   itblRows.push(new TableRow({children:[
     new TableCell({columnSpan:5,borders:CELL_BORDER_ALL,margins:{top:60,bottom:60,left:80,right:80},children:[para([run('Jumlah Total',{bold:true})],{align:AlignmentType.CENTER,before:60,after:60})]}),
-    new TableCell({width:{size:1701,type:WidthType.DXA},borders:CELL_BORDER_ALL,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(rupiah(total),{bold:true})],{align:AlignmentType.RIGHT,before:60,after:60})]})
+    new TableCell({width:{size:1701,type:WidthType.DXA},borders:CELL_BORDER_ALL,margins:{top:60,bottom:60,left:80,right:80},children:[para([run(rupiah(total)+',-',{bold:true})],{align:AlignmentType.RIGHT,before:60,after:60})]})
   ]}));
-  const itemTable = new Table({width:{size:9101,type:WidthType.DXA},columnWidths:[590,3408,992,1134,1276,1701],indent:{size:108,type:WidthType.DXA},rows:itblRows});
+  const itemTable = new Table({width:{size:9072,type:WidthType.DXA},columnWidths:[590,3379,992,1134,1276,1701],rows:itblRows});
 
-  const refStr = d.refJawaban || `${halText} Nomor: ${d.nomorJawaban||'___'} Tanggal ${d.tglJawaban||'___'}`;
+  const refStr = `${halText} Nomor: ${d.refJawaban || d.nomorJawaban || '___'}`;
 
   const ch2 = [];
   ch2.push(emptyPara());
@@ -3600,53 +3608,55 @@ async function callDocxApi(payload, type) {
   ch2.push(...pasal('1','JENIS PENGUJIAN BAHAN JALAN'));
   ch2.push(para([run('PIHAK KEDUA ',{bold:true}),run('mengujikan sampel uji kepada '),run('PIHAK KESATU ',{bold:true}),run('sesuai dengan jenis, jumlah, dan biaya sebagai berikut')],{after:240,align:AlignmentType.JUSTIFIED}));
   ch2.push(itemTable);
-  ch2.push(para([run('  Terbilang : (',{bold:true}),run(`${terb(total)} Rupiah`,{bold:true}),run(')',{bold:true})],{before:60,after:240,align:AlignmentType.JUSTIFIED}));
+  ch2.push(para([run('Terbilang : (',{bold:true}),run(`${terb(total)} Rupiah`,{bold:true}),run(')',{bold:true})],{before:60,after:240,align:AlignmentType.JUSTIFIED}));
   ch2.push(...pasal('2','PEMBAYARAN JASA PENGUJIAN'));
   ch2.push(para([run('Perhitungan biaya pengujian berdasarkan Peraturan Menteri Keuangan Republik Indonesia nomor 19/PMK.02/2024 tentang Jenis dan Tarif atas Jenis Penerimaan Negara Bukan Pajak yang Bersifat Volatil dan Kebutuhan Mendesak pada Kementerian Pekerjaan Umum dan Perumahan Rakyat dan Peraturan Pemerintah Republik Indonesia nomor 21 Tahun 2023 tentang Jenis dan Tarif atas Jenis Penerimaan Negara Bukan Pajak yang Berlaku pada Kementerian Pekerjaan Umum dan Perumahan Rakyat;')],listOpts('lp2')));
-  ch2.push(para([run(`Pihak Kedua berkewajiban membayar seluruh biaya pengujian sebesar Rp.${rupiah(total)} (${terb(total)} Rupiah) dengan meminta Bukti Pembuatan Tagihan PNBP (Billing) oleh Bendahara Satker Balai Besar Pelaksanaan Jalan Nasional Jawa Timur - Bali yang digunakan untuk pembayaran ke Kas Negara. Setelah ada pembayaran, maka `,{bold:true}),run('PIHAK KEDUA ',{bold:true}),run('harus menyerahkan bukti setoran kepada ',{bold:true}),run('PIHAK KESATU',{bold:true}),run('.',{bold:true})],listOpts('lp2')));
+  ch2.push(para([run(`Pihak Kedua berkewajiban membayar seluruh biaya pengujian sebesar Rp.${rupiah(total)} (${terb(total)} Rupiah) dengan meminta Bukti Pembuatan Tagihan PNBP (Billing) oleh Bendahara Satker Balai Besar Pelaksanaan Jalan Nasional Jawa Timur - Bali yang digunakan untuk pembayaran ke Kas Negara. Setelah ada pembayaran, maka `),run('PIHAK KEDUA ',{bold:true}),run('harus menyerahkan bukti setoran kepada '),run('PIHAK KESATU',{bold:true}),run('.')],listOpts('lp2')));
   ch2.push(...pasal('3','PENGGUNAAN SAMPEL UJI'));
-  ch2.push(para([run('PIHAK KEDUA ',{bold:true}),run(`bertanggung jawab terhadap kebenaran sampel uji yang diserahterimakan kepada petugas Laboratorium Pengujian Bahan Jalan Wilayah Jawa Timur dan Bali ${d.lokasiLab==='2'?'Lokasi 2 (Bali)':'Lokasi 1 (Jawa Timur)'} Balai Besar Pelaksanaan Jalan Nasional Jawa Timur-Bali;`,{bold:true})],listOpts('lp3')));
-  ch2.push(para([run('PIHAK KESATU ',{bold:true}),run('wajib melakukan pengujian di Laboratorium sesuai dengan ketentuan yang diuraikan pada pasal 1.',{bold:true})],listOpts('lp3')));
+  ch2.push(para([run('PIHAK KEDUA ',{bold:true}),run(`bertanggung jawab terhadap kebenaran sampel uji yang diserahterimakan kepada petugas Laboratorium Pengujian Bahan Jalan Wilayah Jawa Timur dan Bali ${d.lokasiLab==='2'?'Lokasi 2 (Bali)':'Lokasi 1 (Jawa Timur)'} Balai Besar Pelaksanaan Jalan Nasional Jawa Timur-Bali;`)],listOpts('lp3')));
+  ch2.push(para([run('PIHAK KESATU ',{bold:true}),run('wajib melakukan pengujian di Laboratorium sesuai dengan ketentuan yang diuraikan pada pasal 1.')],listOpts('lp3')));
   ch2.push(...pasal('4','WAKTU PENYELESAIAN PENGUJIAN'));
-  ch2.push(para([run('PIHAK KESATU',{bold:true}),run(` melakukan pengujian dalam waktu ${j.durasiUji||4} (${terb(j.durasiUji||4)}) ${tl}, terhitung mulai dari tanggal ${j.mulai||'___'}  sampai dengan tanggal ${j.selesai||'___'};`,{bold:true})],listOpts('lp4')));
-  ch2.push(para([run('PIHAK KESATU',{bold:true}),run(` memproses laporan dalam waktu ${j.durasiLap||1} (${terb(j.durasiLap||1)}) ${tl}, terhitung mulai dari tanggal ${j.prosesLap||'___'};`,{bold:true})],listOpts('lp4')));
-  ch2.push(para([run('PIHAK KEDUA',{bold:true}),run(` dapat mengambil Laporan Hasil Uji pada tanggal ${j.ambilLap||'___'} dari `,{bold:true}),run('PIHAK KESATU',{bold:true}),run('.',{bold:true})],listOpts('lp4')));
+  ch2.push(para([run('PIHAK KESATU',{bold:true}),run(` melakukan pengujian dalam waktu ${j.durasiUji||4} (${terb(j.durasiUji||4)}) ${tl}, terhitung mulai dari tanggal ${j.mulai||'___'} sampai dengan tanggal ${j.selesai||'___'};`)],listOpts('lp4')));
+  ch2.push(para([run('PIHAK KESATU',{bold:true}),run(` memproses laporan dalam waktu ${j.durasiLap||1} (${terb(j.durasiLap||1)}) ${tl}, terhitung mulai dari tanggal ${j.prosesLap||'___'};`)],listOpts('lp4')));
+  ch2.push(para([run('PIHAK KEDUA',{bold:true}),run(` dapat mengambil Laporan Hasil Uji pada tanggal ${j.ambilLap||'___'} dari `),run('PIHAK KESATU',{bold:true}),run('.')],listOpts('lp4')));
   ch2.push(...pasal('5','PENYERAHAN LAPORAN HASIL UJI'));
   ch2.push(para([run(`Laporan Hasil Uji yang telah diperiksa oleh Penyelia, ditandatangani oleh ${d.jabatanTTD||'Kepala Bidang Pembangunan Jalan dan Jembatan'};`)],listOpts('lp5')));
   ch2.push(para([run('Laporan Hasil Uji yang dimaksud pada Pasal 5 (1), diserahterimakan kepada '),run('PIHAK KEDUA',{bold:true}),run('.',{bold:true})],listOpts('lp5')));
   ch2.push(...pasal('6','PEMBATALAN PENGUJIAN'));
   ch2.push(para([run('Apabila '),run('PIHAK KEDUA ',{bold:true}),run('mengajukan pembatalan pengujian kepada '),run('PIHAK KESATU ',{bold:true}),run('setelah '),run('PIHAK KEDUA ',{bold:true}),run('melakukan pembayaran seperti yang dimaksud pada Pasal 2 (2), maka '),run('PIHAK KEDUA ',{bold:true}),run('tidak akan menuntut pengembalian biaya pengujian tersebut kepada '),run('PIHAK KESATU',{bold:true}),run('.',{bold:true})],{before:120,after:120,align:AlignmentType.JUSTIFIED}));
   ch2.push(...pasal('7','SANKSI'));
-  ch2.push(para([run('Apabila '),run('PIHAK KEDUA ',{bold:true}),run('lalai atau dipandang tidak dapat memenuhi syarat-syarat untuk dilakukannya proses pengujian dalam kurun waktu maksimal 7 (Tujuh) hari kerja setelah melakukan setoran ke Kas Negara, maka '),run('PIHAK KESATU ',{bold:true}),run('berhak membatalkan Surat Perjanjian Pengujian ini secara sepihak tanpa tuntutan apapun dari '),run('PIHAK KEDUA',{bold:true}),run('. Segala biaya pengujian yang telah disetorkan ke Kantor Kas Negara adalah sepenuhnya milik negara dan tidak dapat dikembalikan.',{bold:true})],{before:120,after:120,align:AlignmentType.JUSTIFIED}));
+  ch2.push(para([run('Apabila '),run('PIHAK KEDUA ',{bold:true}),run('lalai atau dipandang tidak dapat memenuhi syarat-syarat untuk dilakukannya proses pengujian dalam kurun waktu maksimal 7 (Tujuh) hari kerja setelah melakukan setoran ke Kas Negara, maka '),run('PIHAK KESATU ',{bold:true}),run('berhak membatalkan Surat Perjanjian Pengujian ini secara sepihak tanpa tuntutan apapun dari '),run('PIHAK KEDUA',{bold:true}),run('. Segala biaya pengujian yang telah disetorkan ke Kantor Kas Negara adalah sepenuhnya milik negara dan tidak dapat dikembalikan.')],{before:120,after:120,align:AlignmentType.JUSTIFIED}));
   ch2.push(...pasal('8','PERSELISIHAN'));
   ch2.push(para([run('Perselisihan yang timbul antara kedua belah pihak akan diselesaikan secara musyawarah untuk memperoleh mufakat.')],{before:120,after:120,align:AlignmentType.JUSTIFIED}));
   ch2.push(...pasal('9','PENUTUP'));
   ch2.push(para([run('Surat Perjanjian Pengujian ini dibuat dan ditandatangani diatas meterai oleh kedua belah pihak dalam rangkap 2 (dua) yang masing\u2013masing mempunyai kekuatan hukum yang sama.')],{before:120,after:120,align:AlignmentType.JUSTIFIED}));
-  // Signature
-  ch2.push(new Table({width:{size:9300,type:WidthType.DXA},columnWidths:[3600,2100,3600],borders:BORDER_NONE_ALL,rows:[
+  // Signature (lebar total = area teks 9072 dxa)
+  const METERAI_BOX = {style:BorderStyle.DASHED,size:6,color:'808080',space:2};
+  const meteraiPara = (t) => new Paragraph({alignment:AlignmentType.CENTER,indent:{left:420,right:420},
+    border:{top:METERAI_BOX,bottom:METERAI_BOX,left:METERAI_BOX,right:METERAI_BOX},
+    children:[new TextRun({text:t,font:ARIAL,size:16,color:'808080'})]});
+  const sigCell = (w, children, va) => new TableCell({width:{size:w,type:WidthType.DXA},borders:BORDER_NONE_ALL,
+    verticalAlign:va||VerticalAlign.TOP,children});
+  ch2.push(new Table({width:{size:9072,type:WidthType.DXA},columnWidths:[3486,2100,3486],borders:BORDER_NONE_ALL,rows:[
     new TableRow({children:[
-      new TableCell({width:{size:3600,type:WidthType.DXA},borders:BORDER_NONE_ALL,children:[para([run('PIHAK KEDUA:',{bold:true})],{align:AlignmentType.CENTER})]}),
-      new TableCell({width:{size:2100,type:WidthType.DXA},borders:BORDER_NONE_ALL,verticalAlign:VerticalAlign.CENTER,children:[para([run('METERAI')],{align:AlignmentType.CENTER})]}),
-      new TableCell({width:{size:3600,type:WidthType.DXA},borders:BORDER_NONE_ALL,children:[para([run('PIHAK KESATU:',{bold:true})],{align:AlignmentType.CENTER})]})
+      sigCell(3486,[para([run('PIHAK KEDUA:',{bold:true})],{align:AlignmentType.CENTER})]),
+      sigCell(2100,[emptyPara()]),
+      sigCell(3486,[para([run('PIHAK KESATU:',{bold:true})],{align:AlignmentType.CENTER})])
     ]}),
     new TableRow({children:[
-      new TableCell({width:{size:3600,type:WidthType.DXA},borders:BORDER_NONE_ALL,children:[
-        emptyPara(),emptyPara(),emptyPara(),emptyPara(),
+      sigCell(3486,[emptyPara(),emptyPara(),emptyPara(),emptyPara(),
         para([run(d.namaPemohon||'___',{bold:true})],{align:AlignmentType.CENTER}),
-        para([run(d.jabatanPemohon||'Direktur')],{align:AlignmentType.CENTER})
-      ]}),
-      new TableCell({width:{size:2100,type:WidthType.DXA},borders:BORDER_NONE_ALL,children:[emptyPara()]}),
-      new TableCell({width:{size:3600,type:WidthType.DXA},borders:BORDER_NONE_ALL,children:[
-        emptyPara(),emptyPara(),emptyPara(),emptyPara(),
-        para([run(d.namaTTD||'___',{bold:true})],{align:AlignmentType.CENTER})
-      ]})
+        para([run(d.jabatanPemohon||'Direktur')],{align:AlignmentType.CENTER})]),
+      sigCell(2100,[meteraiPara('METERAI'),meteraiPara('10.000')],VerticalAlign.CENTER),
+      sigCell(3486,[emptyPara(),emptyPara(),emptyPara(),emptyPara(),
+        para([run(d.namaTTD||'___',{bold:true})],{align:AlignmentType.CENTER})])
     ]})
   ]}));
 
-  const doc2 = new Document({numbering:{config:allNums},sections:[{
-    properties:{page:{size:{width:11907,height:16840},margin:{top:mm(20),right:mm(20),bottom:mm(25),left:mm(30)}}},
+  const doc2 = new Document({styles:DOC_STYLES,numbering:{config:allNums},sections:[{
+    properties:{titlePage:true,   // harus di dalam properties, kalau tidak KOP halaman 1 tidak tampil
+      page:{size:{width:11907,height:16840},margin:{top:mm(20),right:mm(20),bottom:mm(25),left:mm(30),header:mm(10)}}},
     headers:{default:pageHeader, first:firstPageHeader},
-    titlePage:true,
     children:ch2
   }]});
 
